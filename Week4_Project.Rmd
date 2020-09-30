@@ -1,0 +1,63 @@
+---
+title: "Predict Exercise from Human Activity Data"
+output:
+  html_document:
+    keep_md: yes
+  pdf_document: default
+---
+
+# Executive Summary
+
+In this study, we used the Weight Lifting Exercises Dataset from the Human Activity Recognition project (http://groupware.les.inf.puc-rio.br/har) where weight lifters were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions, where one fashion was correct and four were examples of execution mistakes, and data was collected from accelerometers on the belt, forearm, arm, and dumbbell of the weight lifters. This study trains a random forest model using accelerometer data from the training data for this project to predict the fashion in which the activity was performed. Cross validation was performed by holding out 25% of the training data for validation and the model had an accuracy of 0.999 in predicting the classe in the held out data.
+
+# Data set:
+
+```{r, echo=TRUE}
+library(caret)
+library(parallel)
+library(doParallel)
+
+train_file <- 'pml-training.csv'
+test_file <- 'pml-testing.csv'
+train_url <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv'
+test_url <- 'https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv'
+
+if (!file.exists(train_file)) {
+  download.file(train_url, training_file)
+}
+if (!file.exists(test_file)) {
+  download.file(test_url, test_file)
+}
+
+train_data <- read.csv(train_file, na.strings=c("NA", ""))
+train_data <- train_data[,colSums(is.na(train_data)) == 0]
+test_data <- read.csv(test_file, na.strings=c("NA", ""))
+test_data <- test_data[,colSums(is.na(test_data)) == 0]
+qplot(train_data$classe, color=train_data$user_name, xlab="Classes", ylab="Frequency")
+```
+
+Plotting the frequency of occurrence of each of the classes in the training data seems to indicate that it is not skewed toward any one category. Accelerometer data was available from each of the participants for each classe almost an equal number of times.
+
+```{r, echo=TRUE}
+inTrain <- createDataPartition(y=train_data$classe, p=0.75, list=FALSE)
+training <- train_data[inTrain, ]
+training <- training[2:length(training)]
+testing <- train_data[-inTrain, ]
+testing <- testing[2:length(testing)]
+
+cluster <- makeCluster(detectCores() - 2)
+registerDoParallel(cluster)
+fitControl <- trainControl(method = "cv", number=5, allowParallel=TRUE)
+m1 <- train(classe~., method="rf", training, trControl=fitControl)
+pred <- predict(m1, testing)
+confusionMatrix(pred, testing$classe)
+```
+
+Taking the random forest model in R's caret package and training it on the training data set, the model is able to predict the held out test set with almost 99.9% accuracy. This model was then applied to the 20 test cases available in the test data to attain the predictions to be submitted for the project quiz.
+
+```{r, echo=TRUE}
+test_data <- test_data[2:length(test_data)]
+proj_preds <- predict(m1, test_data)
+print(proj_preds)
+```
+
